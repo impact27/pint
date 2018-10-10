@@ -1230,6 +1230,8 @@ class _Quantity(PrettyIPython, SharedRegistryObject):
         if other is None:
             return False
         if not isinstance(other, _Quantity):
+            if other == '':
+                return False
             if _eq(other, 0, True):
                 # Handle the special case in which we compare to zero
                 # (or an array of zeros)
