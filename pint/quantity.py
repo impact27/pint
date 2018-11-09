@@ -76,30 +76,31 @@ def check_implemented(f):
         return result
     return wrapped
 
+
 def recursion(value, units=None):
     if isinstance(value, _Quantity):
         if units is not None:
             value = value.to(units)
-        else:
-            units = value._units
+        units = value._units
         return value.m, units
+
     elif isinstance(value, ndarray):
         if value.dtype != np.dtype('object'):
             if units is None:
-                units = UnitsContainer()
+                units = ''
             return value, units
         if value.size == 0:
             return value, units
         if value.ndim == 0:
             if units is None:
-                units = UnitsContainer()
+                units = ''
             return value, units
         ret = np.zeros_like(value)
         for idx, val in np.ndenumerate(value):
             m, units = recursion(val, units)
             ret[idx] = m
         return ret, units
-            
+
     elif isinstance(value, (list, tuple)):
         if not HAS_NUMPY:
             raise TypeError("Can't use list or tuple without numpy.")
@@ -110,10 +111,13 @@ def recursion(value, units=None):
             m, units = recursion(val, units)
             array.append(m)
         return np.array(array), units
+
     else:
         if units is None:
-            units = UnitsContainer()
+            units = ''
         return value, units
+
+
 @fix_str_conversions
 class _Quantity(PrettyIPython, SharedRegistryObject):
     """Implements a class to describe a physical quantity:
@@ -148,7 +152,6 @@ class _Quantity(PrettyIPython, SharedRegistryObject):
         else:
             return math.isnan(self.magnitude)
     
-        
     def __new__(cls, value, units=None):
         # Get units
         if units is None:
@@ -191,7 +194,7 @@ class _Quantity(PrettyIPython, SharedRegistryObject):
                 value_magnitude = np.asarray(value_magnitude, dtype=float)
             inst = object.__new__(cls)
             inst._magnitude = value_magnitude
-            if value_units is not None:
+            if value_units is not None and value_units != '':
                 inst._units = units * value_units
             else:
                 inst._units = units
@@ -211,9 +214,25 @@ class _Quantity(PrettyIPython, SharedRegistryObject):
         """
         Will be become __iter__() for instances with iterable magnitudes
         """
+        if not hasattr(self._magnitude,"__iter__"):
+            raise TypeError()
         # # Allow exception to propagate in case of non-iterable magnitude
         it_mag = iter(self.magnitude)
         return iter((self.__class__(mag, self._units) for mag in it_mag))
+    
+    def __getitem__(self, key):
+        """
+        Will be become __getitem__() for instances with iterable magnitudes
+        """
+        if not hasattr(self._magnitude,"__getitem__"):
+            raise TypeError()
+        try:
+            value = self._magnitude[key]
+            return self.__class__(value, self._units)
+        except TypeError:
+            raise TypeError("Neither Quantity object nor its magnitude ({})"
+                            "supports indexing".format(self._magnitude))
+            
     @property
     def debug_used(self):
         return self.__used
@@ -1359,8 +1378,8 @@ class _Quantity(PrettyIPython, SharedRegistryObject):
                         
     __magnitude_ufunc = ['isfinite', 'isnan', 'isreal', 'isinf', 'iscomplex', 
                          'argmax', 'argmin', 'sort', 'nonzero', 'argsort',
-                         'nanargmin', 'nanargmax', 'nbytes', 'dtype', 
-                         'ndim']
+                         'nanargmin', 'nanargmax', 'nbytes', 
+                         'ndim', 'size']
     
     __unitless_zero_ok = 'greater greater_equal less less_equal equal not_equal '\
                         'add subtract'.split()
@@ -1496,15 +1515,7 @@ class _Quantity(PrettyIPython, SharedRegistryObject):
                 return functools.partial(self.__numpy_method_wrap, attr)
             return attr
         raise AttributeError("Quantity object doesn't have "
-                                 "attribute '{}'".format(self._magnitude, item))
-
-    def __getitem__(self, key):
-        try:
-            value = self._magnitude[key]
-            return self.__class__(value, self._units)
-        except TypeError:
-            raise TypeError("Neither Quantity object nor its magnitude ({})"
-                            "supports indexing".format(self._magnitude))
+                                 "attribute '{}'".format(item))
 
     def __setitem__(self, key, value):
         try:
